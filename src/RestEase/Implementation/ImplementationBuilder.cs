@@ -47,6 +47,7 @@ namespace RestEase.Implementation
         private static readonly MethodInfo addQueryCollectionMapMethod = typeof(RequestInfo).GetTypeInfo().GetMethod("AddQueryCollectionMap");
         private static readonly MethodInfo addRawQueryParameterMethod = typeof(RequestInfo).GetTypeInfo().GetMethod("AddRawQueryParameter");
         private static readonly MethodInfo addPathParameterMethod = typeof(RequestInfo).GetTypeInfo().GetMethod("AddPathParameter");
+        private static readonly MethodInfo addPathCollectionParameterMethod = typeof(RequestInfo).GetTypeInfo().GetMethod("AddPathCollectionParameter");
         private static readonly MethodInfo addPathPropertyMethod = typeof(RequestInfo).GetTypeInfo().GetMethod("AddPathProperty");
         private static readonly MethodInfo addQueryPropertyMethod = typeof(RequestInfo).GetTypeInfo().GetMethod("AddQueryProperty");
         private static readonly MethodInfo setClassHeadersMethod = typeof(RequestInfo).GetTypeInfo().GetProperty("ClassHeaders").SetMethod;
@@ -548,6 +549,8 @@ namespace RestEase.Implementation
                 methodIlGenerator.Emit(OpCodes.Ldstr, pathProperty.Attribute.Name);
                 methodIlGenerator.Emit(OpCodes.Ldarg_0);
                 methodIlGenerator.Emit(OpCodes.Ldfld, pathProperty.BackingField);
+                if (pathProperty.BackingField.FieldType != typeof(string) && CollectionTypeOfType(pathProperty.BackingField.FieldType) != null) 
+                    methodIlGenerator.Emit(OpCodes.Ldstr, pathProperty.Attribute.Separator);
                 if (pathProperty.Attribute.Format == null)
                     methodIlGenerator.Emit(OpCodes.Ldnull);
                 else
@@ -639,7 +642,8 @@ namespace RestEase.Implementation
 
             foreach (var pathParameter in parameterGrouping.PathParameters)
             {
-                this.AddPathParam(methodIlGenerator, pathParameter);
+                var method = MakePathParameterMethodInfo(pathParameter.Parameter.ParameterType);
+                this.AddPathParam(methodIlGenerator, pathParameter, method);
             }
 
             foreach (var headerParameter in parameterGrouping.HeaderParameters)
@@ -665,6 +669,18 @@ namespace RestEase.Implementation
                 return addQueryParameterMethod.MakeGenericMethod(parameterType);
             else
                 return addQueryCollectionParameterMethod.MakeGenericMethod(typeOfT);
+        }
+
+        private static MethodInfo MakePathParameterMethodInfo(Type parameterType)
+        {
+            Type typeofT = null;
+            if (parameterType != typeof(string))
+                typeofT = CollectionTypeOfType(parameterType);
+
+            if (typeofT == null)
+                return addPathParameterMethod.MakeGenericMethod(parameterType);
+            else
+                return addPathCollectionParameterMethod.MakeGenericMethod(typeofT);
         }
 
         private static MethodInfo MakeQueryMapMethodInfo(Type queryMapType)
@@ -850,12 +866,10 @@ namespace RestEase.Implementation
             methodIlGenerator.Emit(OpCodes.Callvirt, methodInfo);
         }
 
-        private void AddPathParam(ILGenerator methodIlGenerator, IndexedParameter<PathAttribute> pathParameter)
+        private void AddPathParam(ILGenerator methodIlGenerator, IndexedParameter<PathAttribute> pathParameter, MethodInfo methodInfo)
         {
-            var methodInfo = addPathParameterMethod.MakeGenericMethod(pathParameter.Parameter.ParameterType);
-
             // Equivalent C#:
-            // requestInfo.AddPathParameter("name", value, format, urlEncode);
+            // requestInfo.AddPathParameter("name", value, separator, format, urlEncode);
             // where 'value' is the parameter at index parameterIndex
 
             // Duplicate the requestInfo.
@@ -867,14 +881,19 @@ namespace RestEase.Implementation
             // Load the param onto the stack
             // Stack: [..., requestInfo, requestInfo, name, value]
             methodIlGenerator.Emit(OpCodes.Ldarg, (short)pathParameter.Index);
+            // Load the separator onto the stack
+            // Stack: [..., requestInfo, requestInfo, name, value, separator]
+            if (pathParameter.Parameter.ParameterType != typeof(string) && CollectionTypeOfType(pathParameter.Parameter.ParameterType) != null)
+                methodIlGenerator.Emit(OpCodes.Ldstr, pathParameter.Attribute.Separator);
             // Load the format onto the stack
-            // Stack: [..., requestInfo, requestInfo, name, value, format]
+            // Stack: [..., requestInfo, requestInfo, name, value, separator, format]
             if (pathParameter.Attribute.Format == null)
                 methodIlGenerator.Emit(OpCodes.Ldnull);
             else
                 methodIlGenerator.Emit(OpCodes.Ldstr, pathParameter.Attribute.Format);
+
             // Load urlEncode onto the stack
-            // Stack: [..., requestInfo, requestInfo, name, value, format, urlEncode]
+            // Stack: [..., requestInfo, requestInfo, name, value, separator, format, urlEncode]
             methodIlGenerator.Emit(pathParameter.Attribute.UrlEncode ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             // Call AddPathParameter
             // Stack: [..., requestInfo]

@@ -22,6 +22,18 @@ namespace RestEaseUnitTests.ImplementationBuilderTests
             Task DifferentParaneterTypesAsync([Path] object foo, [Path] int? bar);
         }
 
+        public interface IArrayPathParam
+        {
+            [Get("foo/{bar}/{baz}")]
+            Task FooAsync([Path("baz")] IEnumerable<char> charArray, [Path("bar", Separator = "-")] IEnumerable<int> intArray);
+        }
+
+        public interface IArrayPathParamSeparatorReplacement
+        {
+            [Get("foo/{bar}")]
+            Task FooAsync([Path("bar", Separator = "-")] IEnumerable<int> intArray);
+        }
+
         public interface IHasPathParamInPathButNotParameters
         {
             [Get("foo/{bar}/{baz}")]
@@ -189,6 +201,41 @@ namespace RestEaseUnitTests.ImplementationBuilderTests
         {
             // Do not throw
             this.builder.CreateImplementation<IHasEmptyGetParams>(this.requester.Object);
+        }
+
+        [Fact]
+        public void HandlesArrayParam()
+        {
+            var requestInfo = Request<IArrayPathParam>(x => x.FooAsync(new[] { 'a', 'b' }, new[] { 1, 2, 3, }));
+
+            var pathParams = requestInfo.PathParams.ToList();
+
+            Assert.Equal(2, pathParams.Count);
+
+            var serialized = pathParams[0].SerializeToString(null);
+
+            Assert.Equal("baz", serialized.Key);
+            Assert.Equal("a,b", serialized.Value);
+
+            serialized = pathParams[1].SerializeToString(null);
+
+            Assert.Equal("bar", serialized.Key);
+            Assert.Equal("1-2-3", serialized.Value);
+        }
+
+        [Fact]
+        public void HandlesArrayParamWithCustomSeparator()
+        {
+            var requestInfo = Request<IArrayPathParamSeparatorReplacement>(x => x.FooAsync(new[] { 1, 2, 3, 4, 5 }));
+
+            var pathParams = requestInfo.PathParams.ToList();
+
+            Assert.Single(pathParams);
+
+            var serialized = pathParams[0].SerializeToString(null);
+
+            Assert.Equal("bar", serialized.Key);
+            Assert.Equal("1-2-3-4-5", serialized.Value);
         }
 
         [Fact]

@@ -23,6 +23,12 @@ namespace RestEase
         /// </summary>
         public bool UrlEncode { get; set; } = true;
 
+
+        /// <summary>
+        /// Gets or sets a string for separating values for a path collection
+        /// </summary>
+        public string Separator { get; set; } = ",";
+
         /// <summary>
         /// Initialises a new instance of the <see cref="PathAttribute"/> class
         /// </summary>

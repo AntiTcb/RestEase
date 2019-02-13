@@ -51,6 +51,24 @@ namespace RestEaseUnitTests.RequesterTests
         }
 
         [Fact]
+        public void SubstitutesPathParameterCollections()
+        {
+            var requestInfo = new RequestInfo(HttpMethod.Get, "/foo/{bar}");
+            requestInfo.AddPathCollectionParameter("bar", new[] { 1, 2, 3 }, ",");
+            var uri = this.requester.SubstitutePathParameters(requestInfo);
+            Assert.Equal("/foo/1,2,3", uri, ignoreCase: true);
+        }
+
+        [Fact]
+        public void ReplacesPathParameterCollectionSeparator()
+        {
+            var requestInfo = new RequestInfo(HttpMethod.Get, "foo/{bar}");
+            requestInfo.AddPathCollectionParameter("bar", new[] { 'a', 'b' }, separator: "-");
+            var uri = this.requester.SubstitutePathParameters(requestInfo);
+            Assert.Equal("foo/a-b", uri, ignoreCase: true);
+        }
+
+        [Fact]
         public void UsesPathProperties()
         {
             var requestInfo = new RequestInfo(HttpMethod.Get, "/foo/{bar}/baz");
